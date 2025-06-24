@@ -1,5 +1,6 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+
+import * as THREE from 'https://esm.sh/three';
+import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls.js';
 
 const renderer = new THREE.WebGLRenderer({antialias: true});
 
@@ -123,7 +124,6 @@ let prevBass = 0;
 let smoothedBass = 0;
 
 const clock = new THREE.Clock();
-
 let prevVolume = 0;
 let smoothedVolume = 0;
 let smoothedHit = 0;

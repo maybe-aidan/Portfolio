@@ -4,6 +4,7 @@
         <meta charset="UTF-8">
         <meta http-equiv="X-UA-Compatible" content="IE=edge" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="icon" type="image/x-icon" href="favicon.ico">
         <title>Music Visualizer</title>
         <style>
             body{
@@ -13,6 +14,7 @@
     </head>
     <body>
         <input type="file" id="audio-upload" accept="audio/*">
+        <a href="/Portfolio">Return Home</a>
         <script id="vertexshader" type="application/json">
             vec3 mod289(vec3 x)
             {
@@ -149,15 +151,14 @@
             uniform vec2 u_resolution;
             uniform float u_time;
             uniform float u_bass;
-            uniform float u_low;
 
             void main(){
-                float bass_strength = pow(u_bass, 2.5) + pow(u_low, 1.75);
+                float bass_strength = pow(u_bass, 2.5);
 
                 vec2 st = gl_FragCoord.xy / u_resolution;
                 gl_FragColor = vec4(normalize(vec3(st.x * bass_strength, st.y * abs(sin(u_time)) * (1.0/ bass_strength), 1.0 * abs(cos(u_time)) * (1.0/ bass_strength))), 1.0);
             }
         </script>
-        <script src="./js/script.js" type="module"></script>
+        <script src="./script.js" type="module"></script>
     </body>
 </html>
