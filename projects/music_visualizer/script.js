@@ -1,5 +1,5 @@
-import * as THREE from 'https://esm.sh/three';
-import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls.js';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 const renderer = new THREE.WebGLRenderer({antialias: true});
 
@@ -29,7 +29,9 @@ const uniforms = {
     u_low: {value: 0.0},
     u_bass: {value: 0.0},
     u_mid: {value: 0.0},
-    u_high: {value: 0.0}
+    u_high: {value: 0.0},
+    u_volume: {value: 0.0},
+    u_hit: {value: 0.0}
 }
 
 const mat = new THREE.ShaderMaterial({
@@ -121,23 +123,47 @@ let prevBass = 0;
 let smoothedBass = 0;
 
 const clock = new THREE.Clock();
+
+let prevVolume = 0;
+let smoothedVolume = 0;
+let smoothedHit = 0;
+
+function getPerceptualVolume(frequencyData) {
+    let sum = 0;
+    for (let i = 0; i < frequencyData.length; i++) {
+        const freqNorm = i / frequencyData.length;
+        const weight = Math.exp(-Math.pow((freqNorm - 0.25) * 3.5, 2)); // favor mids
+        sum += frequencyData[i] * weight;
+    }
+    return sum / frequencyData.length / 255; // normalize 0–1
+}
+
 function animate(time){
     if(analyser){
         const frequencyData = analyser.getFrequencyData();
         const {low, bass, mid, high} = getFrequencyRanges(frequencyData);
+
+        // Perceptual Volume
+        const rawVolume = getPerceptualVolume(frequencyData);
+        smoothedVolume = 0.9 * smoothedVolume + 0.1 * rawVolume;
+
+        // Detect hits on volume spike
+        const delta = Math.max(rawVolume - prevVolume, 0);
+        smoothedHit = Math.max(smoothedHit * 0.9, delta * 10.0);
+        prevVolume = rawVolume;
     
         // Normalize and detect kick
         const normBass = bass / 255.0;
-        const deltaBass = Math.max(normBass - prevBass, 0.0);
-        prevBass = normBass;
-    
         smoothedBass *= 0.95;
-        smoothedBass = Math.min(Math.max(smoothedBass, deltaBass * 7.0), 3.0);
+        smoothedBass = Math.min(Math.max(smoothedBass, (normBass - prevBass) * 7.0), 3.0);
+        prevBass = normBass;
     
         uniforms.u_low.value = low / 255.0;
         uniforms.u_bass.value = normBass + smoothedBass;
         uniforms.u_mid.value = mid / 255.0;
         uniforms.u_high.value = high / 255.0;
+        uniforms.u_volume.value = smoothedVolume;
+        uniforms.u_hit.value = smoothedHit;
     }
 
     mesh.rotation.x = time / 5000.0;

@@ -4,7 +4,6 @@
         <meta charset="UTF-8">
         <meta http-equiv="X-UA-Compatible" content="IE=edge" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link rel="icon" type="image/x-icon" href="favicon.ico">
         <title>Music Visualizer</title>
         <style>
             body{
@@ -14,7 +13,6 @@
     </head>
     <body>
         <input type="file" id="audio-upload" accept="audio/*">
-        <a href="/Portfolio">Return Home</a>
         <script id="vertexshader" type="application/json">
             vec3 mod289(vec3 x)
             {
@@ -116,15 +114,21 @@
             uniform float u_mid;
             uniform float u_high;
 
+            uniform float u_volume;
+            uniform float u_hit;
+
             void main() {
                 float noise = 3. * pnoise(position + u_time, vec3(10.));
 
                 float sub_bass_displacement = (u_low * 1.5) * cos(position.x * 10.0 + u_time * 7.0) * 0.05 * noise;
 
-                float bass_strength = pow(u_bass, 2.5); // exaggerate peaks
+                float bass_strength = pow(u_bass, 1.75); // exaggerate peaks
                 float bass_displacement = bass_strength * noise * 0.1;
     
                 float mid_displacement = (u_mid)*sin(position.y + u_time * 5.0) * 0.02 * noise;
+
+                float hitPulse = u_hit * sin(position.x * 40.0 +  u_time * 10.0) * 0.05;
+                float volumeWobble = u_volume * sin(position.y * 10.0 + u_time * 2.0) * 0.02;
                 
                 float rippleFreq = 50.0;
                 float rippleAmplitude = 0.05;
@@ -134,7 +138,7 @@
 
                 float high_displacement = u_high * rippleAmplitude * high_detail * noise;
 
-                float totalDisplacement = sub_bass_displacement+ bass_displacement + mid_displacement + high_displacement;
+                float totalDisplacement = sub_bass_displacement+ bass_displacement + mid_displacement + high_displacement + hitPulse + volumeWobble;
 
                 vec3 newPosition = position + normal * totalDisplacement;
                 gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
@@ -144,14 +148,15 @@
             uniform vec2 u_resolution;
             uniform float u_time;
             uniform float u_bass;
+            uniform float u_low;
 
             void main(){
-                float bass_strength = pow(u_bass, 2.5);
+                float bass_strength = pow(u_bass, 2.5) + pow(u_low, 1.75);
 
                 vec2 st = gl_FragCoord.xy / u_resolution;
                 gl_FragColor = vec4(normalize(vec3(st.x * bass_strength, st.y * abs(sin(u_time)) * (1.0/ bass_strength), 1.0 * abs(cos(u_time)) * (1.0/ bass_strength))), 1.0);
             }
         </script>
-        <script src="./script.js" type="module"></script>
+        <script src="./js/script.js" type="module"></script>
     </body>
 </html>
