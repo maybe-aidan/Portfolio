@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Camshade</title>
+  <link rel="shortcut icon" type="image/x-icon" href="favicon.ico">
+  <style>
+    body {
+        margin: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+    }
+    header{
+        display: flex;
+        justify-content: center;
+        font-size: 2rem;
+        font-family: monospace;
+        background-color: #333;
+        color: chocolate;
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+    }
+    #controls {
+        padding: 10px;
+        background-color: #888888;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+        gap: 10px;
+    }
+    #save-frame{
+        display: flex;
+        text-align: center;
+        align-items: center;
+        padding-bottom: 1rem;
+        padding-top: 0;
+        border-radius: 1rem;
+        background-color: #6d6d6d;
+    }
+    #save-frame:hover{
+        background-color: #9c9c9c;
+    }
+
+    .viewport-controls{
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        width: 20%;
+    }
+    #image-mode{
+        height: 1.2rem;
+    }
+
+    .camera{
+        font-size: 2rem;
+    }
+
+    #sandbox {
+        display: flex;
+        flex-grow: 1;
+        overflow: hidden;
+    }
+
+    /* Wrap shader info and textarea together */
+    #shader-container {
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+        width: 50%;
+        height: 100%;
+    }
+
+    .shader-info {
+        background-color: #333;
+        color: white;
+        padding: 10px;
+        overflow-y: hidden;
+        transition: max-height 0.3s ease-in-out;
+    }
+
+    .shader-info-content p{
+        font-weight: 800;
+        font-family: monospace;
+        font-size: 1.0rem;
+    }
+
+    .shader-info-content ul{
+        font-family: monospace;
+        color: chocolate;
+    }
+
+    .shader-info-content {
+        display: block;
+    }
+
+    .shader-info.collapsed .shader-info-content {
+        display: none;
+    }
+
+    textarea {
+        background-color: rgb(20, 20, 20);
+        color: orange;
+        border: none;
+        padding: 10px;
+        font-family: monospace;
+        font-size: 14px;
+        resize: none;
+        outline: none;
+        box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+        flex-grow: 1;
+    }
+
+    #canvas-container {
+        flex-grow: 3;
+        width: 50%;
+        position: relative;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden; /* Prevents the canvas from spilling outside */
+    }
+    
+
+    canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain; /* Ensures proper scaling inside the container */
+    }
+    textarea {
+        flex-grow: 1;
+        background-color: rgb(20, 20, 20);
+        color: orange;
+        border: none;
+        padding: 10px;
+        font-family: monospace;
+        font-size: 14px;
+        resize: none;
+        outline: none;
+        box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+    }
+  </style>
+</head>
+<body>
+    <header>
+        Camshade by Aidan Fox
+    </header>
+    <div id="controls">
+        <div class="shader-controls">
+            <label for="shaders">Select Shader</label>
+            <select name="shaders" id="shaders">
+                <option value="fragment">Default</option>
+                <option value="sketch">Sketch</option>
+                <option value="comic">Comic</option>
+                <option value="ascii">Ascii</option>
+            </select>
+            <button id="compile-shader">Compile and Run</button>
+        </div>
+        <div class="viewport-controls">
+            <div style="display: flex; flex-direction: column; width: 50%;">
+                <select name="image-mode" id="image-mode">
+                    <option value="webcam">Webcam</option>
+                    <option value="image">Upload Image</option>
+                </select>
+                <input type="file" id="image-upload" accept="image/*" style="display: none;" title=" ">
+            </div>
+            <button id="save-frame"><span class="camera">&#x1F4F7</span></button>
+        </div>
+    </div>
+    <div id="sandbox">
+        <div id="shader-container">
+            <div class="shader-info collapsed">
+                <button id="toggle-info">Show Uniform Info</button>
+                <div class="shader-info-content">
+                    <p>Provided Uniforms:</p>
+                        <ul>sampler2D u_texture: Webcam Video Feed</ul>
+                        <ul>vec2 u_resolution: Feed Resolution</ul>
+                        <ul>sampler2D u_noise: Gray Noise Texture</ul>
+                        <ul>float u_time: Current Simulation Time in ms</ul>
+                        <ul>sampler2D u_font: Font Texture</ul>
+                    <p>Other Important Values:</p>
+                        <ul>varying vec2 v_uv: UV coordinates</ul>
+                </div>
+            </div>
+            <textarea name="shader-dev" id="shader-dev" placeholder="Write your shader code here..."></textarea>
+        </div>
+        <div id="canvas-container">
+            <!-- Canvas will be appended here -->
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/110/three.min.js"></script>
+    <script>
+        const scene = new THREE.Scene();
+        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        const renderer = new THREE.WebGLRenderer();
+
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        const parent = document.getElementById('canvas-container');
+        parent.appendChild(renderer.domElement);
+        
+        const video = document.createElement('video');
+        video.muted = true;  // Allow autoplay on mobile devices
+        video.setAttribute('autoplay', 'true');
+        video.setAttribute('playsinline', 'true');
+
+        navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+            video.srcObject = stream;
+            video.play().catch(error => {
+                console.log("Playback failed:", error);
+                alert("Tap to start the video.");
+            });
+            video.addEventListener('loadedmetadata', () => {
+                adjustAspectRatio();
+            });
+        }).catch(error => {
+            console.error("Error accessing webcam:", error);
+            alert("Could not access the webcam. Please check permissions.");
+        });
+
+        async function loadShaderFile(url) {
+            const response = await fetch(url);
+            return response.text();
+        }
+
+        let texture;
+        let imageTexture;
+        let quad;
+        const start = Date.now();
+        let currentShader = 'fragment';
+        let currentMode = "webcam";
+        let userUploadedTexture = null;
+
+        async function init() {
+            const vertexShaderSource = await loadShaderFile('./shaders/vertex.glsl?v=' + Date.now());
+            const fragmentShaderSource = await loadShaderFile(`./shaders/${currentShader}.glsl?v=` + Date.now());
+
+            const font = new THREE.TextureLoader().load("./textures/font1.png");
+            const noise = new THREE.TextureLoader().load("./textures/gray_noise_small.png");
+
+            const resolution = [window.innerWidth, window.innerHeight];
+
+            if(currentMode === "webcam" && !texture){
+                texture = new THREE.VideoTexture(video);
+            }
+
+            const material = new THREE.ShaderMaterial({
+                uniforms: { 
+                    u_texture: { value: texture || imageTexture }, 
+                    u_font: { value: font },
+                    u_noise: { value: noise },
+                    u_resolution: { value: resolution },
+                    u_time: { value: 0.0 }
+                },
+                vertexShader: vertexShaderSource,
+                fragmentShader: fragmentShaderSource,
+            });
+
+            const plane = new THREE.PlaneGeometry(2, 2);
+
+            if (quad) {
+                scene.remove(quad);
+                quad.geometry.dispose();
+                quad.material.dispose();
+            }
+
+            quad = new THREE.Mesh(plane, material);
+            scene.add(quad);
+
+            adjustAspectRatio();
+        }
+
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if(quad && quad.material.uniforms.u_time) {
+                quad.material.uniforms.u_time.value = (Date.now() - start)/1000.0;
+            }
+
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                // Update the texture for each frame
+                texture && (texture.needsUpdate = true);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Handle resizing and maintain aspect ratio
+        function adjustAspectRatio() {
+            if (!quad) return; // Ensure `quad` is initialized
+
+            const containerWidth = parent.clientWidth;
+            const containerHeight = parent.clientHeight;
+
+            const videoAspect = video.videoWidth / video.videoHeight;
+            const containerAspect = containerWidth / containerHeight;
+
+            if (containerAspect > videoAspect) {
+                // Container is wider than the video
+                const scaleX = videoAspect / containerAspect;
+                quad.scale.set(scaleX, 1, 1);
+            } else {
+                // Container is taller than the video
+                const scaleY = containerAspect / videoAspect;
+                quad.scale.set(1, scaleY, 1);
+            }
+
+            renderer.setSize(containerWidth, containerHeight); // Match renderer size to container
+            camera.updateProjectionMatrix();
+        }
+
+        async function loadShaderIntoTextArea(shaderName) {
+            const shaderSource = await loadShaderFile(`./shaders/${shaderName}.glsl?v=` + Date.now());
+            const textArea = document.getElementById('shader-dev');
+            textArea.value = shaderSource; // Populate the textarea with the shader source
+        }
+
+        async function changeShader(newShader) {
+            currentShader = newShader;
+            await loadShaderIntoTextArea(newShader);
+            await init(); // Reinitialize the shader with the new fragment shader
+        }
+
+        // Event listeners
+
+        document.addEventListener("DOMContentLoaded", function() {
+            texture = new THREE.VideoTexture(video)
+            changeShader("fragment");
+        });
+
+        document.getElementById('shaders').addEventListener('change', (event) => {
+            changeShader(event.target.value);
+        });
+
+        document.getElementById('image-mode').addEventListener('change', (event) => {
+            const mode = event.target.value;
+            currentMode = mode;
+
+            if (mode === 'webcam') {
+                document.getElementById('image-upload').style.display = "none";
+                texture = new THREE.VideoTexture(video);
+                imageTexture = null;
+                init();
+            } else if (mode === 'image') {
+                document.getElementById('image-upload').style.display = "block";
+            }
+        });
+
+        document.getElementById('image-upload').addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const img = new Image();
+                    img.onload = () => {
+                        texture = new THREE.Texture(img);
+                        texture.needsUpdate = true;
+                        init();
+                    };
+                    img.src = reader.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        document.getElementById('toggle-info').addEventListener('click', function() {
+            const shaderInfo = document.querySelector('.shader-info');
+            const button = document.getElementById('toggle-info');
+            
+            // Toggle the 'collapsed' class on the shader-info section
+            shaderInfo.classList.toggle('collapsed');
+            
+            // Change button text based on whether the section is collapsed or expanded
+            if (shaderInfo.classList.contains('collapsed')) {
+                button.textContent = 'Show Uniform Info'; // Collapse version
+            } else {
+                button.textContent = 'Show Less'; // Expanded version
+            }
+        });
+        
+        document.getElementById('compile-shader').addEventListener('click', async () => {
+            const textArea = document.getElementById('shader-dev');
+            const updatedShaderCode = textArea.value; // Get the code from the textarea
+
+            // Update the fragment shader in the WebGL pipeline
+            const vertexShaderSource = await loadShaderFile('./shaders/vertex.glsl?v=' + Date.now());
+
+            const font = new THREE.TextureLoader().load("./textures/font1.png");
+            const noise = new THREE.TextureLoader().load("./textures/gray_noise_small.png");
+            const resolution = [window.innerWidth, window.innerHeight];
+
+            const material = new THREE.ShaderMaterial({
+                uniforms: { 
+                    u_texture: { value: texture }, 
+                    u_font: { value: font },
+                    u_noise: { value: noise },
+                    u_resolution: { value: resolution },
+                    u_time: { value: 0.0 }
+                },
+                vertexShader: vertexShaderSource,
+                fragmentShader: updatedShaderCode, // Use the code from the textarea
+            });
+
+            const plane = new THREE.PlaneGeometry(2, 2);
+
+            // Remove the old quad if it exists
+            if (quad) {
+                scene.remove(quad);
+                quad.geometry.dispose(); // Dispose the geometry
+                quad.material.dispose(); // Dispose the material
+            }
+
+            quad = new THREE.Mesh(plane, material);
+            scene.add(quad);
+
+            adjustAspectRatio(); // Ensure aspect ratio is adjusted
+        });
+
+        window.addEventListener('resize', adjustAspectRatio);
+
+        document.getElementById('save-frame').addEventListener('click', () => {
+            // Explicitly render the scene to ensure the canvas has the latest frame
+            renderer.render(scene, camera);
+            
+            // Save the current frame
+            const dataURL = renderer.domElement.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = 'snapshot.png';
+            link.href = dataURL;
+            link.click();
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.ctrlKey && event.key === 's') {
+                event.preventDefault();
+                document.getElementById('save-frame').click();
+            } else if (event.ctrlKey && event.key === 'Enter') {
+                event.preventDefault();
+                document.getElementById('compile-shader').click();
+            }
+        });
+
+
+        // Render
+        init();
+        animate();
+    </script>
+</body>
+</html>
