@@ -124,8 +124,7 @@
 
                 float sub_bass_displacement = (u_low * 1.5) * cos(position.x * 10.0 + u_time * 7.0) * 0.05 * noise;
 
-                float bass_strength = pow(u_bass, 2.5) ; // exaggerate peaks
-                bass_strength = smoothstep(0.0, 1.0, bass_strength);
+                float bass_strength = pow(u_bass, 1.75) ; // exaggerate peaks
                 float bass_displacement = bass_strength * noise * 0.1;
     
                 float mid_displacement = (u_mid)*sin(position.y + u_time * 5.0) * 0.02 * noise;
